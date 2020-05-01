@@ -1,0 +1,245 @@
+
+loan <- read.csv("loan.csv")
+str(loan)
+which(names(loan) =="last_credit_pull_d")
+
+#removing unwated columns
+l1 <- loan[c(1:49)]
+View l
+View(l)
+View(l1)
+
+
+
+unique(l1$mths_since_last_record)
+unique(l1$initial_list_status)
+l1 <- subset(l1, select=-c(url,desc,title,initial_list_status))
+
+# Data Cleaning
+
+# removing %
+l1$x_intRate <- as.numeric(gsub("%","",l1$int_rate))/100
+l1$x_revol_util <- as.numeric(gsub("%","",l1$revol_util))/100
+summary(l1$emp_length)
+
+
+summary(l1$annual_inc)
+
+l1$term_mon <- gsub("months","",l1$term)
+
+
+
+#Converting dates
+
+
+library(lubridate)
+
+l1$issue_d <- parse_date_time(l1$issue_d, orders = "y")
+l1$issue_d <- year(l1$issue_d)
+
+l1$x_earlist_cr_year <- parse_date_time(l1$x_earlist_cr_year, orders = "y")
+l1$x_earlist_cr_year <- year(l1$x_earlist_cr_year)
+
+loan_defaulters$x_earlist_cr_year <- year(loan_defaulters$x_earlist_cr_year)
+
+
+
+
+
+library(ggplot2)
+
+LoanByYear <- ggplot(l1,aes(x=factor(x_IssueYear)))
+LoanByYear+geom_bar(stat ='count', fill= "blue")+ggtitle("No of Loans Issued by Year") + labs(x = "Year", y ="No of issued Loans")
+ggsave("No of loans Issued By year.png")
+
+library(dplyr)
+
+#removing more columns
+group_by(l1$x_IssueYear)
+unique(l1$delinq_2yrs)
+unique(l1$pymnt_plan)
+# getting Index of the column
+which(names(l1)=="pymnt_plan")
+
+l1 <- l1(select(c[-2,-18]))
+l1 <- select(l1,c[-2,-18]))
+l1 <- select(l1,c[-2,-18])
+
+
+#removing few more columns
+l1 <- subset(l1, select(-c(mths_since_last_delinq,mths_since_last_record,member_id,pymnt_plan)))
+l1 <- subset(l1, select =-c(mths_since_last_delinq,mths_since_last_record,member_id,pymnt_plan))
+
+
+
+#including few column again
+
+l1$tax_liens<- merge(l1,loan,by="id")[,c("tax_liens")]
+
+l1$pub_rec_bankruptcies<- merge(l1,loan,by="id")[,c("pub_rec_bankruptcies")]
+
+#Creating the data prep table
+loanDataprep <-subset(l1, select=-c(funded_amnt,funded_amnt_inv,int_rate,installment,emp_title,issue_d,zip_code,addr_state,revol_bal,total_acc,out_prncp,out_prncp_inv,total_pymnt,total_pymnt_inv,total_rec_prncp,total_rec_int,total_rec_late_fee,recoveries,collection_recovery_fee,last_pymnt_d,last_pymnt_amnt,next_pymnt_d,last_credit_pull_d))
+View(loanDataprep)
+
+
+install.packages("Amelia")
+library(Amelia)
+
+# An ovrview od the missingness of the data
+missmap(loanDataprep,y.cex=0.8,x.cex = 0.8)
+
+# Transforming variable
+unique(loanDataprep$loan_status)
+
+loanDataprep$x_Loanstatus <-case_when(loanDataprep$loan_status == "Fully Paid" ~ 0, TRUE~ 1)
+library(dplyr)
+
+loanDataprep$x_emp_length <-gsub(' years','',loanDataprep$emp_length)
+loanDataprep$x_emp_length <-gsub(' year','',loanDataprep$x_emp_length)
+
+loanDataprep$x_emp_length <-case_when(loanDataprep$x_emp_length == "< 1" ~ 0, loanDataprep$x_emp_length == "10+"  ~ 10, TRUE~ as.numeric(loanDataprep$x_emp_length))
+
+#Finding Outliers
+summary(loanDataprep$annual_inc)
+Income_outliers<-boxplot.stats((loanDataprep$annual_inc))
+View(Income_outliers)
+
+
+boxplot(loanDataprep$annual_inc)
+> ggsave("Income Outliers.png")
+
+
+sum(is.na(loanDataprep))
+
+# Columns with missing data
+
+names(loanDataprep[, !complete.cases(t(loanDataprep))])
+
+# replacing NA with 0
+loan_defaulters[is.na(loan_defaulters)]<- 0
+
+summary(loanDataprep$annual_inc)
+
+Inc_grt_1m <- loanDataprep[which(loanDataprep$annual_inc > 1000000), ]
+inc_less_1m<-loanDataprep[which(loanDataprep$annual_inc <1000000),]
+View(inc_less_1m)
+
+
+#PLot 1: Interest Plot
+library(ggplot2)
+ ggplot(inc_less_1m,aes(x=x_intRate*100))+geom_bar(stat='count', fill="purple")+ggtitle("Frequencey of Interest Rate")+ labs(x= "Interest Rate", y="Count")
+> ggsave("Interest Rate.png")
+
+
+
+# Only defaluters and current
+
+loan_defaulters1 <- inc_less_1m[which(inc_less_1m$x_Loanstatus==1), ]
+View(loan_defaulters)
+
+missmap(loan_defaulters, y.cex=0.8, x.cex=(0.8))
+# x_emp_length and bankrupcies
+
+#removing NA's
+> loan_defaulters1[is.na(loan_defaulters1)]<- 0
+
+
+
+
+# Plot 2: Grade
+ ggplot(loan_defaulters, aes(x = factor(grade), fill=factor(loan_status)))+ geom_bar(stats='count', position="dodge")+scale_fill_manual(values= c("purple","grey"))+ggtitle("Grade against Status")+labs(x="Grade", y="Count",fill="Status")
+> ggsave("Grade against Status.png")
+
+# PLo2 2.2 Issue loan on differnt Home Ownership
+> ggplot(loan_defaulters1,aes(x_IssueYear))+geom_bar(aes(fill=grade))+facet_grid(~home_ownership)+labs(title ="Issue loan of different Home Ownership", x="Issue Year",y="Count", fill = "Grade")
+ggsave("Issue loan on differnt Home Ownership.png")
+
+
+#Plot 3/; Term
+table(loanDataprep$x_Loanstatus,loanDataprep$term_mon)
+
+               36   60 
+  Charged Off 3227 2399
+  Current        0 1140
+
+prop.table(table(loanDataprep$x_Loanstatus,loanDataprep$term_mon),1)
+ ggplot(loan_defaulters, aes(x = factor(term_mon), fill=factor(loan_status)))+ geom_bar(stats='count', position="stack")+scale_fill_manual(values= c("purple","yellow"))+ggtitle("Term against Status")+labs(x="Term", y="Count",fill="Status")
+> ggsave("Term against Status.png")
+
+
+#Plot 4 Purpose
+table(loan_defaulters$x_Loanstatus,loan_defaulters$purpose)
+
+prop.table(table(loan_defaulters$x_Loanstatus,loan_defaulters$purpose),1)
+
+
+ggplot(loan_defaulters,aes(x=factor(x_Loanstatus), fill = factor(purpose)))+ geom_bar(stat='count',
+position = "dodge")+ggtitle("Purpose vs loan Status")+labs(x="Purpose",y="Status")
+ggsave("Purpose.png")
+
+ggplot(loan_defaulters,aes(x=factor(loan_status), fill = factor(home_ownership)))+ geom_bar(stat='count')+ggtitle("Home Ownership vs Loan Status")+labs(x="Status",y="Status", fill = "Home Ownership")
+>ggsave("Home Ownership.png")
+
+#5 PLOT: Annual Income
+# Adding  a range ot annual income
+loan_defaulters$income_range <- case_when(loan_defaulters$annual_inc <= 20000 ~ "< $20,000", between(loan_defaulters$annual_inc,20001,40000)~ "$20,000 to $40,000", between(loan_defaulters$annual_inc,40001,60000)~"$40,000 to $60,000",between(loan_defaulters$annual_inc,60001,80000)~"$60,000 to $80,000", between(loan_defaulters$annual_inc,80001,100000)~ "$80,000 to $100,000",loan_defaulters$annual_inc > 100000 ~ "> $100,000")
+
+ggplot(loan_defaulters,aes(x=factor(income_range), fill= factor(loan_status)))+geom_bar(stat='count',position = "dodge")+scale_fill_manual(values = c("grey","purple"))+ggtitle("Impact of income on Defaulters")+labs(x="Annual Income",y="Count", fill = "Loan Status")
+
+
+ggsave("Annual Income.png")
+
+# Plot 6 : year of employment
+ggplot(loan_defaulters,aes(x=factor(x_emp_length), fill= factor(loan_status)))+geom_bar(stat='count',position = "dodge")+scale_fill_manual(values = c("grey","purple"))+ggtitle("Defaulters By years of employment")+labs(x="Years of Employment",y="Count", fill = "Loan Status")
+
+ggsave("Years of Employment.png")
+
+
+#Plot 7 EMp vs Loan amount
+ggplot(loan_defaulters,aes(x=factor(x_emp_length),y = loan_amnt))+geom_bar(stat='Identity', fill="purple")+ggtitle("Loan Amount vsYears of employment")+labs(x="Years of Employment",y="Loan Amount")
+
+ggsave("loan amount vs employemnt length.png")
+
+
+library(lubridate)
+loan_defaulters$x_earlist_cr_year <- parse_date_time(loan_defaulters$earliest_cr_line, orders = "y")
+loan_defaulters1$x_earlist_cr_yearas. <- year(loan_defaulters1$x_earlist_cr_year)
+
+
+# PLot 7: Interest Rate vs Grade
+
+ ggplot(loan_defaulters1, aes(x=grade, y=x_intRate*100)) + geom_boxplot(aes(fill="Interest Rate"))+labs(x ="Grade", y="Interest Rate")+ggtitle("Interest Rate as per Grade")
+> ggsave("Grade vs Interest rate.png")
+
+# PLot Iinterest rate vs Term
+
+ggplot(loan_defaulters, aes(x=term_mon, y=x_intRate*100)) + geom_boxplot(aes(fill="term_month"))+labs(x ="Term", y="Interest Rate")+ggtitle("Interest Rate as per Term")
+> ggsave("Interest Rate vs Term.png")
+
+# Plot 9: Issue Year vs Term vs Grade
+
+> ggplot(loan_defaulters,aes(x_IssueYear))+geom_bar(aes(fill=grade))+facet_grid(~term_mon)+labs(title ="Loan Volumne by Year", x="Issue Year",y="Count", fill = "Grade")
+> ggsave("Loan Volumn By Issue Year.png")
+
+#Verification Status
+table(loan_defaulters$verification_status)
+
+   Not Verified Source Verified        Verified 
+           2369            1744            2653 
+
+ggplot(loan_defaulters,aes(x=verification_status))+geom_bar()+labs(title ="Income Verification", x="Verification Status")
+ggsave("verification Status.png")
+
+
+
+ ggplot(loan_defaulters1,aes(x=factor(verification_status), fill = factor(loan_status)))+ geom_bar(stat='count', position = "dodge")+labs(title="Verification vs Loan Status",x="Verification",y="Count", fill = "Loan Status")
+ ggsave("Verification vs Loan Status.png")
+
+ 
+ 
+ # Geographic Distribution
+ 
+ ggplot(loan_defaulters1,aes(x=factor(State), fill = factor(loan_status)))+ geom_bar(stat='count')+scale_fill_manual(values = c("purple","grey"))+labs(title="Loan Volume by State",x="State",y="Count", fill = "Loan Status")
+> ggsave("Loan Volume by State.png")
+ 
